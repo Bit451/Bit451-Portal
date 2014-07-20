@@ -1,18 +1,11 @@
-## How to build on Android
+All dev should be done in master branch under www/greenaddress.it/
 
- 1. Install Android SDK and Cordova 3.5
- 2. `cd` to the WalletCordova directory
- 3. Run `android update project --path platforms/android --subprojects`
- 4. Run `android update project --path facebook-android-sdk-3.7/facebook`
- 5. Run `cordova build android`
+[Site](http://bit451.com/) deployed from master to gh-pages [using](https://gist.github.com/cobyism/4730490):
 
-After following these steps you should get a debug apk file in `platforms/android/ant-build/GreenAddressIt-debug.apk`.
+```
+git subtree push --prefix www/greenaddress.it/ origin gh-pages
+```
 
+Built with [Cordova](http://cordova.apache.org/), a platform for building native mobile applications using HTML, CSS and JavaScript.
 
-## How to build on iOS
-
- 1. Install Xcode and Cordova 3.5
- 2. `cd` to the WalletCordova directory
- 3. Run `cordova build ios`
-
-After following these steps you should get an .app in platforms/ios/build/emulator/GreenAddress.It.app.
+See [parent project](https://github.com/greenaddress/WalletCordova) for additional README info.
