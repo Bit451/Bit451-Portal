@@ -1073,7 +1073,7 @@ angular.module('greenWalletServices', [])
     };
     return txSenderService;
 }]).factory('facebook', ['$q', '$rootScope', 'cordovaReady', '$interval', function($q, $rootScope, cordovaReady, $interval) {
-    if (!document.getElementById('fb-root')) return;
+    if (!document.getElementById('fb-root') || !FB_APP_ID) return;
 
     var FB_deferred = $q.defer();
     var FB_promise = FB_deferred.promise;
