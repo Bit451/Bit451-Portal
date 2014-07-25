@@ -56,24 +56,6 @@
   </div>
 </div>
 <hr class="double">
-<div class="row" ng-controller="VibrationController">
-  <div class="col-md-3">
-    <div class="sub-header">Vibrate</div>
-    <div class="sub-header-desc">Enable or disable vibrations on mobile devices</div>
-  </div>
-  <div class="col-md-9" submittable>
-    <form role="form" class="form-horizontal">
-        <div class="form-group">
-            <label class="switch col-sm-3">
-                <input type="checkbox" class="switch" ng-model="wallet.appearance.vibrate"/>
-                <span class="switch"></span>
-                Enable vibrations
-            </label>
-        </div>
-    </form>
-  </div>
-</div>
-<hr class="double">
 <div class="row">
   <div class="col-md-3">
     <div class="sub-header">Language</div>
@@ -161,8 +143,8 @@
           <label ng-show="quicklogin.enabled" class="control-label col-sm-3">Изменить PIN-код</label>
           <label ng-hide="quicklogin.enabled" class="control-label col-sm-3">Установить PIN-код</label>
           <div class="col-sm-4">
-            <input type="tel" inputmode="numeric" class="form-control" placeholder="Четырех численный номер"
-                   maxlength="4" pattern="[0-9]{4}" ng-pattern="/[0-9]{4}/" ng-model="quicklogin.new_pin"/>
+            <input type="tel" inputmode="numeric" class="form-control" placeholder="4-15 digits number"
+                   maxlength="15" pattern="[0-9]{4,15}" ng-pattern="/[0-9]{4,15}/" ng-model="quicklogin.new_pin"/>
             <input type="submit" class="btn btn-primary" ng-show="quicklogin.new_pin" value="Подтвердить" ng-disabled="quicklogin.setting_pin" />
           </div>
         </div>
@@ -212,14 +194,6 @@
         <input class="form-control" ng-disabled="thirdparty.toggling_custom && thirdparty.toggling_custom!='initial'" type="password" ng-model="thirdparty.customstate.password" placeholder="Пароль" />
         <input type="submit" class="btn btn-sm btn-default" value="(( thirdparty.customstate.save_button_label ))" ng-show="thirdparty.customstate.username && thirdparty.customstate.password" ng-disabled="thirdparty.toggling_custom && thirdparty.toggling_custom!='initial'" ng-click="thirdparty.customstate.save()" />
       </div>
-    
-      <hr>
-      <button class="btn btn-block-xs btn-twitter" disabled><i class="icon-twitter"></i> Twitter <span class="coming-soon">Скоро будет</span></button>
-      <label class="switch">
-        <input type="checkbox" class="switch" disabled>
-        <span class="switch"></span>
-      </label>
-    
     </form>
   </div>
 </div>
@@ -466,13 +440,13 @@
 <div class="row">
   <div class="col-md-3">
     <div class="sub-header">nLockTime</div>
-    <div class="sub-header-desc">nLockTime переводи позволяют вам возвратить ваши средства без подписи GreenAddress.it после определённого количество блоков</div>
+    <div class="sub-header-desc">nLockTime transactions allow you to redeem your deposited funds without GreenAddress' signature after pre-defined number of blocks</div>
   </div>
   <div class="col-md-9">
     <form role="form" class="form-inline" ng-submit="settings.nlocktime.update()">
       <div class="form-group">
         <div ng-class="{grayedout: !settings.notifications.email_incoming || !settings.notifications.email_outgoing || !wallet.twofac.email_confirmed}">
-          <label for="id_nlocktime_blocks" class="control-label">Разрешить использование средств без подписи GreenAddress.it после</label>
+          <label for="id_nlocktime_blocks" class="control-label">Allow redeeming funds without GreenAddress' signature after</label>
           <input class="form-control" type="tel" ng-model="settings.nlocktime.blocks_new" ng-disabled="settings.nlocktime.updating_nlocktime_blocks || !settings.notifications.email_incoming || !settings.notifications.email_outgoing || !wallet.twofac.email_confirmed" />
           блоков
           <input type="submit" class="btn btn-sm btn-default" value="Save" ng-show="settings.nlocktime.blocks_new != settings.nlocktime.blocks" ng-disabled="settings.nlocktime.updating_nlocktime_blocks"  />
@@ -525,6 +499,7 @@
     </div>
   </div>
 </div>
+<!--
 <hr class="double">
 <div class="row">
   <div class="col-md-3">
@@ -541,7 +516,6 @@
             <span class="coming-soon">Скоро будет</span>
           </span>
       </label>
-      <!--
       <hr>
       <div class="form-group">
         <label class="control-label col-sm-3">Задержать платеж</label>
@@ -555,10 +529,10 @@
           </select>
         </div>
       </div>
-      -->
     </form>
   </div>
 </div>
+-->
 <hr class="double">
 <div class="row">
   <div class="col-md-3">
