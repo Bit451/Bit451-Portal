@@ -6,7 +6,7 @@
             <div class="create-modal-header">
                 Step 2 of 4
                 <div class="progress">
-                  <div class="progress-bar progress-bar-success" role="progressbar" style="width: 100%"></div>
+                  <div class="progress-bar progress-bar-success" role="progressbar" style="width: 50%"></div>
                 </div>
             </div>
 
@@ -29,10 +29,10 @@
                 <a class="btn btn-link btn-block-xs pull-left" href="#/info#content_container" ng-class="{disabled:signup.setting_pin}" ng-hide="signup.seed_progress < 100 || !signup.logged_in || signup.any_social_done">
                     Take me to my wallet and skip all this!
                 </a>
-                <a ng-hide="signup.noLocalStorage" href="#/signup_pin#content_container" class="noanimate btn btn-primary btn-block-xs pull-right" ng-class="{disabled:signup.twofac_in_progress || signup.seed_progress < 100 || !signup.logged_in || signup.login_failed || !wallet.twofac.any}">
+                <a ng-hide="signup.noLocalStorage || signup.has_btchip" href="#/signup_pin#content_container" class="noanimate btn btn-primary btn-block-xs pull-right" ng-class="{disabled:signup.twofac_in_progress || signup.seed_progress < 100 || !signup.logged_in || signup.login_failed || !wallet.twofac.any}">
                     Continue!
                 </a>
-                <a ng-show="signup.noLocalStorage" href="#/signup_oauth#content_container" class="noanimate btn btn-primary btn-block-xs pull-right" ng-class="{disabled:signup.twofac_in_progress || signup.seed_progress < 100 || !signup.logged_in || signup.login_failed || !wallet.twofac.any}">
+                <a ng-show="signup.noLocalStorage || signup.has_btchip" href="#/signup_oauth#content_container" class="noanimate btn btn-primary btn-block-xs pull-right" ng-class="{disabled:signup.twofac_in_progress || signup.seed_progress < 100 || !signup.logged_in || signup.login_failed || !wallet.twofac.any}">
                     Continue!
                 </a>
             </div>

@@ -118,10 +118,6 @@ angular.module('greenWalletControllers', [])
     
     var clearwallet = function() {
         $scope.wallet = {
-            show_fiat: false,
-            toggle_balance_title: function() {
-                this.show_fiat = !this.show_fiat;
-            },
             update_balance: function(first) {
                 var that = this;
                 tx_sender.call('http://greenaddressit.com/txs/get_balance').then(function(data) {
@@ -190,7 +186,7 @@ angular.module('greenWalletControllers', [])
             $scope.wallet.refresh_transactions(data);
         });
         if ($scope.wallet.expired_deposits && $scope.wallet.expired_deposits.length) {
-            $modal.open({
+            $scope.redeposit_modal = $modal.open({
                 templateUrl: BASE_URL+'/'+LANG+'/wallet/partials/wallet_modal_redeposit.html',
                 controller: 'RedepositController',
                 scope: $scope
@@ -319,13 +315,17 @@ angular.module('greenWalletControllers', [])
         return deferred.promise;
     };
     $scope.redeposit_single_tx = function() {
+        $scope.redepositing = true;
         redeposit($scope.wallet.expired_deposits).then(function() {
+            $scope.redeposit_modal.close();
             notices.makeNotice('success', gettext('Re-depositing successful!'));
         }, function(err) {
+            $scope.redepositing = false;
             notices.makeNotice('error', err);
         });
     };
     $scope.redeposit_multiple_tx = function() {
+        $scope.redepositing = true;
         return tx_sender.call("http://greenaddressit.com/vault/prepare_redeposit",
                 [[$scope.wallet.expired_deposits[0].txhash, $scope.wallet.expired_deposits[0].out_n]]).then(function() {
             // prepare one to set appropriate tx data for 2FA
@@ -339,13 +339,16 @@ angular.module('greenWalletControllers', [])
                     });})(i);
                 }
                 promise.then(function() {
+                    $scope.redeposit_modal.close();
                     notices.makeNotice('success', gettext('Re-depositing successful!'));
                 }, function(error) {
+                    $scope.redepositing = false;
                     notices.makeNotice('error', error);
                 });
                 return promise;
             });
         }, function(error) {
+            $scope.redepositing = false;
             notices.makeNotice('error', error);
         })
         

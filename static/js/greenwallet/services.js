@@ -101,11 +101,11 @@ angular.module('greenWalletServices', [])
             autotimeoutService.promise = $timeout(countdown, timeoutms);
         }
     };
-    
+
     autotimeoutService.registerObserverCallback = function(callback){
         autotimeoutService['callbacks'].push(callback);
     };
-    
+
     autotimeoutService.stop = function() {
         $document.find('body').off('mousemove keydown DOMMouseScroll mousewheel mousedown touchstart');
         if (autotimeoutService.promise) {
@@ -133,8 +133,8 @@ angular.module('greenWalletServices', [])
 
     return autotimeoutService;
 
-}]).factory('wallets', ['$q', '$rootScope', 'tx_sender', '$location', 'notices', '$modal', 'focus', 'crypto', 'gaEvent', 'storage', 'mnemonics', 'addressbook', 'autotimeout', 'social_types', 'sound',
-        function($q, $rootScope, tx_sender, $location, notices, $modal, focus, crypto, gaEvent, storage, mnemonics, addressbook, autotimeout, social_types, sound) {
+}]).factory('wallets', ['$q', '$rootScope', 'tx_sender', '$location', 'notices', '$modal', 'focus', 'crypto', 'gaEvent', 'storage', 'mnemonics', 'addressbook', 'autotimeout', 'social_types', 'sound', '$interval', '$timeout',
+        function($q, $rootScope, tx_sender, $location, notices, $modal, focus, crypto, gaEvent, storage, mnemonics, addressbook, autotimeout, social_types, sound, $interval, $timeout) {
     var walletsService = {};
     var handle_double_login = function(retry_fun) {
         return $modal.open({
@@ -144,7 +144,7 @@ angular.module('greenWalletServices', [])
         });
     }
     walletsService.requireWallet = function($scope, dontredirect) {
-        if (!$scope.wallet.hdwallet && !$scope.wallet.trezor_dev) {
+        if (!$scope.wallet.hdwallet && !$scope.wallet.trezor_dev && !$scope.wallet.btchip) {
             if (!dontredirect) {
                 var location = '/?redir=' + $location.path();
                 var search = '';
@@ -189,6 +189,7 @@ angular.module('greenWalletServices', [])
                 tx_sender.wallet = $scope.wallet;
                 $scope.wallet.hdwallet = hdwallet;
                 $scope.wallet.trezor_dev = tx_sender.trezor_dev;
+                $scope.wallet.btchip = tx_sender.btchip;
                 $scope.wallet.mnemonic = mnemonic;
                 if (data.last_login) {
                     $scope.wallet.last_login = data.last_login;
@@ -218,9 +219,11 @@ angular.module('greenWalletServices', [])
                 $scope.wallet.nlocktime_blocks = data.nlocktime_blocks;
                 if (path) {
                     $scope.wallet.gait_path = path;
-                } else {
+                } else if (path_seed) {
                     $scope.wallet.gait_path_seed = path_seed;
                     $scope.wallet.gait_path = mnemonics.seedToPath(path_seed);
+                } else {
+                    $scope.wallet.gait_path = data.gait_path;
                 }
                 if (data.gait_path !== $scope.wallet.gait_path) {
                     tx_sender.call('http://greenaddressit.com/login/set_gait_path', $scope.wallet.gait_path).catch(function(err) {
@@ -256,8 +259,18 @@ angular.module('greenWalletServices', [])
     };
     walletsService.login_trezor = function($scope, trezor_dev, path, signup, logout) {
         tx_sender.trezor_dev = trezor_dev;
-        return this._login($scope, undefined, undefined, signup, logout, undefined, path, trezor_dev);
-    }
+        return this._login($scope, undefined, undefined, signup, logout, undefined, path);
+    };
+    walletsService.login_btchip = function($scope, btchip, btchip_pubkey, logout) {
+        tx_sender.btchip = btchip;
+        tx_sender.btchip_address = btchip_pubkey.bitcoinAddress.value;
+        var hdwallet = new Bitcoin.HDWallet();
+        hdwallet.network = cur_net;
+        hdwallet.pub = new Bitcoin.ECPubKey(Bitcoin.convert.hexToBytes(btchip_pubkey.publicKey.toString(HEX)));
+        hdwallet.chaincode = Bitcoin.convert.hexToBytes(btchip_pubkey.chainCode.toString(HEX));
+        tx_sender.hdwallet = hdwallet;
+        return this._login($scope, hdwallet, undefined, false, logout, undefined, undefined);
+    };
     walletsService.loginWatchOnly = function($scope, token_type, token, logout) {
         var promise = tx_sender.loginWatchOnly(token_type, token, logout), that = this;
         promise = promise.then(function(json) {
@@ -323,7 +336,7 @@ angular.module('greenWalletServices', [])
         });
     };
     var parseSocialDestination = function(social_destination) {
-        try { 
+        try {
             var data = JSON.parse(social_destination);
             if (data.type == 'voucher') return gettext('Voucher');
             else return social_destination;
@@ -369,7 +382,7 @@ angular.module('greenWalletServices', [])
                     cache.items.push(tx);
                     cache.last_txhash = tx.txhash;
                 }
-                any_unconfirmed_seen = num_confirmations < 6 && !tx.double_spent_by;
+                any_unconfirmed_seen = any_unconfirmed_seen || (num_confirmations < 6 && !tx.double_spent_by);
 
                 var value = new Bitcoin.BigInteger('0'),
                     in_val = new Bitcoin.BigInteger('0'), out_val = new Bitcoin.BigInteger('0'),
@@ -383,7 +396,7 @@ angular.module('greenWalletServices', [])
                 for (var j = 0; j < tx.eps.length; j++) {
                     var ep = tx.eps[j];
                     if (ep.is_relevant) {
-                        if (ep.is_credit) {                            
+                        if (ep.is_credit) {
                             var bytes = Bitcoin.base58.decode(ep.ad);
                             var version = bytes[0];
                             var _external_social = version != Bitcoin.network[cur_net].p2shVersion;
@@ -450,7 +463,7 @@ angular.module('greenWalletServices', [])
                         var ep = tx.eps[j];
                         if (ep.is_credit && (!ep.is_relevant || ep.social_destination)) {
                             if (ep.social_destination && ep.social_destination_type != social_types.PAYMENTREQUEST) {
-                                try { 
+                                try {
                                     tx_social_destination = JSON.parse(ep.social_destination);
                                     tx_social_value = ep.value;
                                 } catch (e) {
@@ -521,7 +534,7 @@ angular.module('greenWalletServices', [])
                             for (var i = 0; i < Math.min(this.limit, this.list.length); i++) {
                                 var item = this.list[i];
                                 csv_list.push(item.ts + ',' + item.description.replace(',', '\'') + ',' + item.value + ',' + item.value_fiat);
-                            }   
+                            }
                             this.csv = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv_list.join('\n'));
                         },
                         output_values: output_values});
@@ -530,62 +543,123 @@ angular.module('greenWalletServices', [])
         }).finally(function() { $rootScope.is_loading -= 1; });
         return d.promise
     };
-    var _sign_and_send_tx = function($scope, data, priv_der, twofactor, notify) {
+    var _sign_and_send_tx = function($scope, data, priv_der, twofactor, notify, progress_cb, send_after) {
         var d = $q.defer();
         var tx = Bitcoin.Transaction.deserialize(data.tx);
-        var signatures = [];
+        var signatures = [], device_deferred = null, signed_n = 0;
+
         for (var i = 0; i < tx.ins.length; ++i) {
             (function(i) {
+                var key, path = [];
                 if (data.prev_outputs[i].privkey) {
-                    var key = $q.when(data.prev_outputs[i].privkey);
-                } else {
-                    var key = tx_sender.hdwallet;
+                    key = $q.when(data.prev_outputs[i].privkey);
+                } else if (tx_sender.hdwallet.priv) {
                     if (priv_der) {
-                        key = $q.when(key.derivePrivate(data.prev_outputs[i].branch)).then(function(key) {
-                            return key.derivePrivate(data.prev_outputs[i].pointer);
-                        });
-                    } else {
-                        key = $q.when(key.derive(data.prev_outputs[i].branch));
-                        if (data.prev_outputs[i].subaccount) {
-                            key = key.then(function(key) {
-                                return key.derivePrivate(data.prev_outputs[i].subaccount);
+                        key = $timeout(function() { return
+                                $q.when(tx_sender.hdwallet.derivePrivate(data.prev_outputs[i].branch)).then(function(key) {
+                                    return key.derivePrivate(data.prev_outputs[i].pointer);
+                                });
                             });
-                        }
-                        key = key.then(function(key) {
-                            return key.derive(data.prev_outputs[i].pointer);
+                    } else {
+                        key = $timeout(function() {
+                            key = $q.when(tx_sender.hdwallet.derive(data.prev_outputs[i].branch));
+                            if (data.prev_outputs[i].subaccount) {
+                                key = key.then(function(key) {
+                                    return key.derivePrivate(data.prev_outputs[i].subaccount);
+                                });
+                            }
+                            key = key.then(function(key) {
+                                return key.derive(data.prev_outputs[i].pointer);
+                            });
+                            return key;
                         });
                     }
                     key = key.then(function(key) {
                         return key.priv;
                     });
+                } else {
+                    if (priv_der) {
+                        path.push(data.prev_outputs[i].branch + "'");
+                        path.push(data.prev_outputs[i].pointer + "'");
+                    } else {
+                        path.push(data.prev_outputs[i].branch);
+                        if (data.prev_outputs[i].subaccount) {
+                            path.push(data.prev_outputs[i].subaccount + "'");
+                        }
+                        path.push(data.prev_outputs[i].pointer);
+                    }
                 }
-                var sign = key.then(function(key) {
+                if (!key) {
                     var script = new Bitcoin.Script(Bitcoin.convert.hexToBytes(data.prev_outputs[i].script));
                     var SIGHASH_ALL = 1;
-                    var sign = key.sign(tx.hashTransactionForSignature(script, i, SIGHASH_ALL));
-                    sign.push(SIGHASH_ALL);
-                    return Bitcoin.convert.bytesToHex(sign);
-                });
+                    var sign_deferred = $q.defer();
+
+                    var next = function() {
+                        return $scope.wallet.btchip.gaStartUntrustedHashTransactionInput_async(
+                            i == 0,
+                            tx.cloneTransactionForSignature(script, i, SIGHASH_ALL)
+                        ).then(function(finished) {
+                            var this_ms = 0, this_expected_ms = 6500;
+                            var int_promise = $interval(function() {
+                                this_ms += 100;
+                                var progress = signed_n / tx.ins.length;
+                                progress += (1/tx.ins.length) * (this_ms/this_expected_ms);
+                                if (progress_cb) progress_cb(Math.min(100, Math.round(100 * progress)));
+                            }, 100);
+                            return $scope.wallet.btchip.app.gaUntrustedHashTransactionInputFinalizeFull_async(tx).then(function(finished) {
+                                return $scope.wallet.btchip.app.signTransaction_async(path.join('/')).then(function(sig) {
+                                    $interval.cancel(int_promise);
+                                    signed_n += 1;
+                                    sign_deferred.resolve(sig.toString(HEX));
+                                }, sign_deferred.reject);
+                            }, sign_deferred.reject)
+                        }, sign_deferred.reject);
+                    }
+
+                    if (!device_deferred) {
+                        device_deferred = next();
+                    } else {
+                        device_deferred = device_deferred.then(next);
+                    }
+
+                    var sign = sign_deferred.promise;
+                } else {
+                    var sign = key.then(function(key) {
+                        signed_n += 1;
+                        if (progress_cb) progress_cb(Math.round(100 * signed_n / tx.ins.length));
+                        var script = new Bitcoin.Script(Bitcoin.convert.hexToBytes(data.prev_outputs[i].script));
+                        var SIGHASH_ALL = 1;
+                        var sign = key.sign(tx.hashTransactionForSignature(script, i, SIGHASH_ALL));
+                        sign.push(SIGHASH_ALL);
+                        return Bitcoin.convert.bytesToHex(sign);
+                    });
+                }
                 signatures.push(sign);
             })(i);
         }
-        $q.all(signatures).then(function(signatures) {
-            tx_sender.call("http://greenaddressit.com/vault/send_tx", signatures, twofactor||null).then(function(data) {
-                d.resolve();
-                if (!twofactor && $scope) {
-                    tx_sender.call("http://greenaddressit.com/login/get_spending_limits").then(function(data) {
-                        $scope.wallet.limits.total = data.total;
-                    });
-                }
-                if (notify !== false) {
-                    sound.play(BASE_URL + "/static/sound/coinsent.mp3", $scope);
-                    notices.makeNotice('success', notify || gettext('Bitcoin transaction sent!'));
-                }
-            }, function(reason) {
-                d.reject();
-                notices.makeNotice('error', gettext('Transaction failed: ') + reason.desc);
-                sound.play(BASE_URL + "/static/sound/wentwrong.mp3", $scope);
-            });
+        if (!send_after) {
+            var send_after = $q.when();
+        }
+        var d_all = $q.all(signatures);
+        send_after.then(function() {
+            d_all.then(function(signatures) {
+                tx_sender.call("http://greenaddressit.com/vault/send_tx", signatures, twofactor||null).then(function(data) {
+                    d.resolve();
+                    if (!twofactor && $scope) {
+                        tx_sender.call("http://greenaddressit.com/login/get_spending_limits").then(function(data) {
+                            $scope.wallet.limits.total = data.total;
+                        });
+                    }
+                    if (notify !== false) {
+                        sound.play(BASE_URL + "/static/sound/coinsent.mp3", $scope);
+                        notices.makeNotice('success', notify || gettext('Bitcoin transaction sent!'));
+                    }
+                }, function(reason) {
+                    d.reject();
+                    notices.makeNotice('error', gettext('Transaction failed: ') + reason.desc);
+                    sound.play(BASE_URL + "/static/sound/wentwrong.mp3", $scope);
+                });
+            }, d.reject);
         }, d.reject);
         return d.promise;
     }
@@ -666,15 +740,15 @@ angular.module('greenWalletServices', [])
         });
         return deferred.promise;
     }
-    walletsService.sign_and_send_tx = function($scope, data, priv_der, twofac_data, notify) {
+    walletsService.sign_and_send_tx = function($scope, data, priv_der, twofac_data, notify, progress_cb) {
         if ($scope && data.requires_2factor) {
             var d = $q.defer();
             walletsService.get_two_factor_code($scope, 'send_tx').then(function(twofac_data) {
-                d.resolve(_sign_and_send_tx($scope, data, priv_der, twofac_data, notify));
+                d.resolve(_sign_and_send_tx($scope, data, priv_der, twofac_data, notify, progress_cb));
             }, function(err) { d.reject(err); });
             return d.promise;
         } else {
-            return _sign_and_send_tx($scope, data, priv_der, twofac_data, notify);
+            return _sign_and_send_tx($scope, data, priv_der, twofac_data, notify, progress_cb);
         }
     }
     walletsService.addCurrencyConversion = function($scope, model_name) {
@@ -692,17 +766,17 @@ angular.module('greenWalletServices', [])
                 } else {
                     var oldFiat = $scope[model_name].amount_fiat;
                     if (!newValue) {
-                        $scope[model_name].amount_fiat = '';
+                        $scope[model_name].amount_fiat = undefined;
                     } else {
                         $scope[model_name].amount_fiat = newValue * $scope.wallet.fiat_rate / div;
                         $scope[model_name].amount_fiat = trimDecimalPlaces(2, $scope[model_name].amount_fiat);
                     }
-                    if ($scope[model_name].amount_fiat.toString() !== (oldFiat || '').toString()) {
+                    if ($scope[model_name].amount_fiat !== oldFiat) {
                         $scope[model_name].updated_by_conversion = true;
                     }
                 }
             }
-            if ($scope.wallet.fiat_rate) { 
+            if ($scope.wallet.fiat_rate) {
                 _update();
             } else {
                 $scope.$on('first_balance_updated', _update);
@@ -716,21 +790,21 @@ angular.module('greenWalletServices', [])
                 } else {
                     var oldBTC = $scope[model_name].amount;
                     if (!newValue) {
-                        $scope[model_name].amount = '';
+                        $scope[model_name].amount = undefined;
                     } else {
                         $scope[model_name].amount = (div * newValue / $scope.wallet.fiat_rate);
                         $scope[model_name].amount = trimDecimalPlaces(unitPlaces, $scope[model_name].amount);
                     }
-                    if ($scope[model_name].amount.toString() !== (oldBTC || '').toString()) {
+                    if ($scope[model_name].amount !== oldBTC) {
                         $scope[model_name].updated_by_conversion = true;
                     }
                 }
             }
-            if ($scope.wallet.fiat_rate) { 
+            if ($scope.wallet.fiat_rate) {
                 _update();
             } else {
                 $scope.$on('first_balance_updated', _update);
-            }           
+            }
         });
     };
     walletsService.create_pin = function(pin, $scope) {
@@ -874,7 +948,7 @@ angular.module('greenWalletServices', [])
         cordovaReady(function() {
             document.addEventListener("resume", function() {
                 if (!txSenderService.wallet) return;
-                if (session) {  
+                if (session) {
                     session.close();  // reconnect on resume
                 }
                 session = null;
@@ -882,7 +956,7 @@ angular.module('greenWalletServices', [])
                 txSenderService.wallet.update_balance();
                 txSenderService.wallet.refresh_transactions();
             }, false);
-        })();        
+        })();
     } else if (isMobile && typeof document.addEventListener !== undefined) {
         // reconnect on tab shown in mobile browsers
         document.addEventListener("visibilitychange", function() {
@@ -893,24 +967,26 @@ angular.module('greenWalletServices', [])
         }, false);
     }
     var attempt_login = false;
-    var onAuthed = function(s) {
+    var onAuthed = function(s, login_d) {
         session = s;
         session.subscribe('http://greenaddressit.com/tx_notify', function(topic, event) {
             gaEvent('Wallet', 'TransactionNotification');
-            $rootScope.$broadcast('transaction', event);       
+            $rootScope.$broadcast('transaction', event);
         });
         session.subscribe('http://greenaddressit.com/block_count', function(topic, event) {
             $rootScope.$broadcast('block', event);
         });
-        var d1, d2;
+        var d1, d2, logging_in = false;
         if (txSenderService.hdwallet && (txSenderService.logged_in || attempt_login)) {
-            d1 = txSenderService.login(false, true); // force_relogin
+            d1 = txSenderService.login('if_same_device', true); // logout=if_same_device, force_relogin
+            logging_in = true;
         } else if (txSenderService.watch_only) {
             d1 = txSenderService.loginWatchOnly(txSenderService.watch_only[0], txSenderService.watch_only[1]);
+            logging_in = true;
         } else {
             d1 = $q.when(true);
         }
-        d1.catch(function(err) { 
+        d1.catch(function(err) {
             if (err.uri == 'http://greenaddressit.com/error#doublelogin') {
                 autotimeout.stop();
                 if (txSenderService.wallet) txSenderService.wallet.clear();
@@ -928,7 +1004,10 @@ angular.module('greenWalletServices', [])
         } else {
             d2 = $q.when(true);
         }
-        $q.all([d1, d2]).then(function() {
+        $q.all([d1, d2]).then(function(results) {
+            if (logging_in) {
+                login_d.resolve(results[0]);
+            }
             // missed calls queues
             for (i in calls_missed) {
                 var item = calls_missed[i];
@@ -951,7 +1030,7 @@ angular.module('greenWalletServices', [])
         });
     };
     var retries = 60, everConnected = false, disconnected = false, connecting = false;
-    var connect = function() {
+    var connect = function(login_d) {
         if (connecting) return;
         connecting = true;
         ab.connect(wss_url,
@@ -963,7 +1042,7 @@ angular.module('greenWalletServices', [])
                         var signature = s.authsign(challenge, token);
                         s.auth(signature).then(function(permissions) {
                             connecting = false;
-                            onAuthed(s);
+                            onAuthed(s, login_d);
                         });
                     });
                 });
@@ -1003,7 +1082,7 @@ angular.module('greenWalletServices', [])
             d.resolve(txSenderService.logged_in);
         } else {
             var hdwallet = txSenderService.hdwallet;
-            if (hdwallet) {
+            if (hdwallet.priv) {
                 attempt_login = true;
                 if (session) {
                     session.call('http://greenaddressit.com/login/get_challenge',
@@ -1028,63 +1107,92 @@ angular.module('greenWalletServices', [])
                                             return data;
                                         });
                                     } else if (disconnected) {
-                                        connect();
+                                        d = $q.defer();
+                                        connect(d);
+                                        return d.promise;
                                     }
                                 }));
                             });
                         });
                     });
                 } else if (disconnected) {
-                    connect();
-                }                
-            } else {  // trezor_dev
-                var trezor_dev = txSenderService.trezor_dev;
-                trezor_dev._typedCommonCall('GetAddress', 'Address', {
-                    address_n: [],
-                    coin_name: cur_net == 'testnet' ? 'Testnet' : 'Bitcoin'
-                }).then(function (addr) {
-                    txSenderService.call('http://greenaddressit.com/login/get_trezor_challenge',
-                            addr.message.address).then(function(challenge) {
+                    d = $q.defer();
+                    connect(d);
+                    return d.promise;
+                }
+            } else {  // trezor_dev || btchip
 
-                        msg = Bitcoin.CryptoJS.enc.Hex.stringify(Bitcoin.CryptoJS.enc.Utf8.parse('greenaddress.it      login ' + challenge))
-                        // generate random path to derive key from - avoids signing using the same key twice
-                        var max64int_hex = '';
-                        while (max64int_hex.length < 16) max64int_hex += 'F';
-                        var TWOPOWER64 = new Bitcoin.BigInteger(max64int_hex, 16).add(Bitcoin.BigInteger.ONE);
-                        var random_path_hex = Bitcoin.ecdsa.getBigRandom(TWOPOWER64).toString(16);
-                        while (random_path_hex.length < 16) random_path_hex = '0' + random_path_hex;
-                        var path_bytes = Bitcoin.convert.hexToBytes(random_path_hex);
-                        var path = [];
-                        for (var i = 0; i < 4; i++) {
-                            path.push(+Bitcoin.BigInteger.fromByteArrayUnsigned(path_bytes.slice(0, 2)))
-                            path_bytes.shift(); path_bytes.shift();
-                        }
-                        trezor_dev.signing = true;
-                        trezor_dev._typedCommonCall('SignMessage', 'MessageSignature',
-                                {'message': msg, address_n: path}).then(function(res) {
-                            signature = Bitcoin.ecdsa.parseSigCompact(Bitcoin.convert.hexToBytes(res.message.signature));
-                            trezor_dev.signing = false;
-                            d.resolve(device_id().then(function(devid) {
-                                return txSenderService.call('http://greenaddressit.com/login/authenticate',
-                                        [signature.r.toString(), signature.s.toString(), signature.i.toString()], logout||false,
-                                         random_path_hex, devid).then(function(data) {
-                                    txSenderService.logged_in = data;
-                                    return data;
+                var trezor_dev = txSenderService.trezor_dev,
+                    btchip = txSenderService.btchip;
+                var get_pubkey = function() {
+                    if (trezor_dev) {
+                        return trezor_dev._typedCommonCall('GetAddress', 'Address', {
+                            address_n: [],
+                            coin_name: cur_net == 'testnet' ? 'Testnet' : 'Bitcoin'
+                        }).then(function(addr) { return addr.message.address; });
+                    } else {
+                        return $q.when(txSenderService.btchip_address);
+                    }
+                }
+                get_pubkey().then(function (addr) {
+                    txSenderService.call('http://greenaddressit.com/login/get_trezor_challenge',
+                            addr).then(function(challenge) {
+                        var msg_plain = 'greenaddress.it      login ' + challenge;
+                        var msg = Bitcoin.CryptoJS.enc.Hex.stringify(Bitcoin.CryptoJS.enc.Utf8.parse(msg_plain));
+                        // btchip requires 0xB11E to skip HID authentication
+                        // 0x4741 = 18241 = 256*G + A in ASCII
+                        var path = [0x4741b11e];
+
+                        if (trezor_dev) {
+                            trezor_dev.signing = true;
+                            trezor_dev._typedCommonCall('SignMessage', 'MessageSignature',
+                                    {'message': msg, address_n: path}).then(function(res) {
+                                var signature = Bitcoin.ecdsa.parseSigCompact(Bitcoin.convert.hexToBytes(res.message.signature));
+                                trezor_dev.signing = false;
+                                d.resolve(device_id().then(function(devid) {
+                                    return txSenderService.call('http://greenaddressit.com/login/authenticate',
+                                            [signature.r.toString(), signature.s.toString(), signature.i.toString()], logout||false,
+                                             random_path_hex, devid).then(function(data) {
+                                        txSenderService.logged_in = data;
+                                        return data;
+                                    });
+                                }));
+                            }, function(err) {
+                                d.reject(err.message);
+                                trezor_dev.signing = false;
+                            });
+                        } else {
+                            var t0 = new Date();
+                            $q.when(hdwallet.derive(path[0])).then(function(result_pk) {
+                                btchip.app.signMessagePrepare_async(path.join('/'), new ByteString(msg, HEX)).then(function(result) {
+                                    btchip.app.signMessageSign_async(new ByteString("00", HEX)).then(function(result) {
+                                        var signature = Bitcoin.ecdsa.parseSig(Bitcoin.convert.hexToBytes(result.toString(HEX)));
+                                        var i = Bitcoin.ecdsa.calcPubKeyRecoveryParam(
+                                            result_pk.pub.pub, signature.r, signature.s, Bitcoin.Message.magicHash(msg_plain));
+                                        d.resolve(device_id().then(function(devid) {
+                                            return txSenderService.call('http://greenaddressit.com/login/authenticate',
+                                                    [signature.r.toString(), signature.s.toString(), i.toString()], logout||false,
+                                                     'GA', devid).then(function(data) {
+                                                txSenderService.logged_in = data;
+                                                return data;
+                                            });
+                                        }));
+                                    });
                                 });
-                            }));
-                        }, function(err) {
-                            d.reject(err.message);
-                            trezor_dev.signing = false;
-                        });
+                            });
+                        }
                     });
                 });
-            }   
+            }
         }
         return d.promise;
     };
     txSenderService.logout = function() {
         if (session) {
             session.close();
+        }
+        if (txSenderService.btchip) {
+            txSenderService.btchip.dongle.disconnect_async();
         }
         disconnected = true;
         txSenderService.logged_in = false;
@@ -1152,7 +1260,7 @@ angular.module('greenWalletServices', [])
             }
         });
 
-        if (window.cordova) {    
+        if (window.cordova) {
             FB.init({
                 appId: FB_APP_ID,
                 nativeInterface: CDV.FB,
@@ -1220,7 +1328,7 @@ angular.module('greenWalletServices', [])
             var w = window.open('https://ssl.reddit.com/api/v1/authorize?client_id='+REDDIT_APP_ID+'&redirect_uri='+redir+'&response_type=code&scope='+scope+'&state=' + state,
                         '_blank', 'toolbar=0,menubar=0,width=1000,height=600,left='+left+',top='+top);
             var deferred = $q.defer();
-            var interval = setInterval(function() { if (w.closed) { 
+            var interval = setInterval(function() { if (w.closed) {
                 clearInterval(interval);
                 deferred.resolve(true);
             } }, 500);
@@ -1250,7 +1358,7 @@ angular.module('greenWalletServices', [])
     // is wrapped inside cordovaReady, because it uses WebSockets)
 
     // Maybe it might be better to add some runEvenWithoutCordova
-    // argument to cordovaReady for that WebSockets special case, 
+    // argument to cordovaReady for that WebSockets special case,
     // and by default don't run anything on desktop from the function
     // returned there...
     if (!window.cordova) {
@@ -1402,7 +1510,7 @@ angular.module('greenWalletServices', [])
     return storageService;
 }]).factory('device_id', ['storage', function(storage) {
     var uuid4 = function() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {  
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var nums = new Uint32Array(1), r, v;
             window.crypto.getRandomValues(nums);
             r = nums[0] % 16,
@@ -1459,7 +1567,7 @@ angular.module('greenWalletServices', [])
                            next_prefix.length < get_name(items_copy[0]).length) {
                         next_prefix += get_name(items_copy[0])[next_prefix.length];
                         if (next_prefix.length == 3) {
-                            while (partition.length && 
+                            while (partition.length &&
                                     partition[partition.length-1].name.substring(0, 3) == next_prefix) {
                                 next_partition.push(partition.pop());
                             }
@@ -1480,7 +1588,7 @@ angular.module('greenWalletServices', [])
                 var href = 'https://www.facebook.com/' + value[1];
                 return {name: value[0], type: value[3], address: value[1], has_wallet: has_wallet, href: href};
             } else {
-                return {name: value[0], type: value[3], has_wallet: value[4], address: value[1]}; 
+                return {name: value[0], type: value[3], has_wallet: value[4], address: value[1]};
             }
         },
         update_with_items: function(items, $routeParams) {
@@ -1546,7 +1654,7 @@ angular.module('greenWalletServices', [])
                             $rootScope.is_loading -= 1;
                         }
                     });
-                });                
+                });
             });
         }
     };
@@ -1582,7 +1690,7 @@ angular.module('greenWalletServices', [])
                             console.log("error playing sound: " + JSON.stringify(e));
                         });
                     mediaRes.play();
-                } else if (typeof Audio != "undefined") { 
+                } else if (typeof Audio != "undefined") {
                     //HTML5 Audio
                     $timeout(function() { new Audio(src).play(); });
                 } else {
@@ -1640,12 +1748,12 @@ angular.module('greenWalletServices', [])
                         qrcode.decode();
                         that.stop_scanning($scope);
                     }
-                    catch(e){       
+                    catch(e){
                         console.log(e);
                         setTimeout(captureToCanvas, 500);
                     };
                 }
-                catch(e){       
+                catch(e){
                         console.log(e);
                         setTimeout(captureToCanvas, 500);
                 };
@@ -1692,12 +1800,12 @@ angular.module('greenWalletServices', [])
                     var img = new Image();
                     img.onload = function() {
                         /*
-                        Helpful URLs: 
+                        Helpful URLs:
                         http://hacks.mozilla.org/2011/01/how-to-develop-a-html5-image-uploader/
                         http://stackoverflow.com/questions/19432269/ios-html5-canvas-drawimage-vertical-scaling-bug-even-for-small-images
-                      
+
                         There are a lot of arbitrary things here. Help to clean this up welcome.
-                        
+
                         context.save();
                         context.scale(1e6, 1e6);
                         context.drawImage(img, 0, 0, 1e-7, 1e-7, 0, 0, 1e-7, 1e-7);
@@ -1799,6 +1907,258 @@ angular.module('greenWalletServices', [])
             return deferred.promise;
         }
     }
+}]).factory('btchip', ['$q', '$interval', '$modal', '$rootScope', 'mnemonics', 'notices', 'focus',
+        function($q, $interval, $modal, $rootScope, mnemonics, notices, focus) {
+    var cardFactory;
+    if (window.ChromeapiPlugupCardTerminalFactory) {
+        cardFactory = new ChromeapiPlugupCardTerminalFactory();
+    }
+
+    return {
+        _setupWrappers: function(btchip) {
+            // wrap some functions to allow using them even after disconnecting the dongle
+            // (prompting user to reconnect and enter pin)
+            var service = this;
+            var WRAP_FUNCS = [
+                'gaStartUntrustedHashTransactionInput_async'
+            ];
+            for (var i = 0; i < WRAP_FUNCS.length; i++) {
+                var func_name = WRAP_FUNCS[i];
+                btchip[func_name] = function() {
+                    var deferred = $q.defer();
+                    var origArguments = arguments;
+                    try {
+                        var d = btchip.app[func_name].apply(btchip.app, arguments)
+                    } catch (e) {
+                        // handle `throw "Connection is not open"` gracefully - getDevice() below
+                        var d = $q.reject();
+                    }
+                    d.then(function(data) {
+                        deferred.resolve(data);
+                    }, function(error) {
+                        if (!error || !error.indexOf) {
+                            service.getDevice().then(function(btchip_) {
+                                btchip.app = btchip_.app;
+                                btchip.dongle = btchip_.dongle;
+                                deferred.resolve(btchip[func_name].apply(btchip, origArguments));
+                            });
+                        } else {
+                            if (error.indexOf("6982") >= 0) {
+                                // setMsg("Dongle is locked - enter the PIN");
+                                return service.promptPin('', function(err, pin) {
+                                    if (!pin) {
+                                        deferred.reject();
+                                        return;
+                                    }
+                                    btchip.app.verifyPin_async(new ByteString(pin, ASCII)).then(function() {
+                                        deferred.resolve(btchip[func_name].apply(btchip, origArguments));
+                                    }).fail(function(error) {
+                                        btchip.dongle.disconnect_async();
+                                        if (error.indexOf("6982") >= 0) {
+                                            notices.makeNotice("error", gettext("Invalid PIN"));
+                                        } else if (error.indexOf("6985") >= 0) {
+                                            notices.makeNotice("error", gettext("Dongle is not set up"));
+                                        } else if (error.indexOf("6faa") >= 0) {
+                                            notices.makeNotice("error", gettext("Dongle is locked - reconnect the dongle and retry"));
+                                        } else {
+                                            notices.makeNotice("error", error);
+                                        }
+                                        deferred.reject();
+                                    });
+                                });
+                            } else if (error.indexOf("6985") >= 0) {
+                                notices.makeMessage('error', gettext("Dongle is not set up"));
+                                deferred.reject();
+                            } else if (error.indexOf("6faa") >= 0) {
+                                notices.makeMessage('error', gettext("Dongle is locked - remove the dongle and retry"));
+                                deferred.reject();
+                            }
+                        }
+                    });
+                    return deferred.promise;
+                }
+            }
+            return btchip;
+        },
+        promptPin: function(type, callback) {
+            var scope, modal;
+
+            scope = angular.extend($rootScope.$new(), {
+                pin: '',
+                type: type
+            });
+
+            modal = $modal.open({
+                templateUrl: BASE_URL+'/'+LANG+'/wallet/partials/wallet_modal_btchip_pin.html',
+                size: 'sm',
+                windowClass: 'pinmodal',
+                backdrop: 'static',
+                keyboard: false,
+                scope: scope
+            });
+
+            focus('btchipPinModal');
+
+            return modal.result.then(
+                function (res) { return callback(null, res); },
+                function (err) { callback(err); }
+            );
+        },
+        getDevice: function(noModal) {
+            var service = this;
+            var deferred = $q.defer();
+
+            if (!cardFactory) return deferred.promise;
+
+            if (!noModal) {
+                var modal = $modal.open({
+                    templateUrl: BASE_URL+'/'+LANG+'/wallet/partials/wallet_modal_usb_device.html',
+                });
+                modal.result.finally(function() {
+                    $interval.cancel(tick);
+                });
+            };
+
+            var check = function() {
+                cardFactory.list_async().then(function(result) {
+                    if (result.length) {
+                        cardFactory.getCardTerminal(result[0]).getCard_async().then(function(dongle) {
+                            var app = new BTChip(dongle);
+                            app.getFirmwareVersion_async().then(function(version) {
+                                if (version.firmwareVersion.toString(HEX) < '000104080000') {
+                                    var notice = gettext("Old BTChip firmware version detected. Please upgrade to at least %s.").replace('%s', '1.4.8');
+                                    notices.makeNotice("error", notice);
+                                    return;
+                                }
+                                if (noModal) {
+                                    $interval.cancel(tick);
+                                } else {
+                                    modal.close();  // modal close cancels the tick
+                                }
+                                deferred.resolve(service._setupWrappers({dongle: dongle, app: app}));
+                            });
+                        });
+                    }
+                });
+            }
+            var tick = $interval(check, 1000);
+            check();
+
+            return deferred.promise;
+        },
+        setupSeed: function(mnemonic) {
+            var deferred = $q.defer();
+            var service = this;
+
+            this.getDevice().then(function(btchip_) {
+                var scope = $rootScope.$new(),
+                    wrong_pin, btchip = btchip_;
+                scope.btchip = {
+                    already_setup: false,
+                    gait_setup: false,
+                    storing: false,
+                    seed_progress: 0,
+                    reset: function() {
+                        this.resetting = true;
+                        this.resets_remaining = 3;
+                        wrong_pin = '00000000000000000000000000000000';
+                        var attempt = function() {
+                            btchip.app.verifyPin_async(new ByteString(wrong_pin, ASCII)).then(function() {
+                                wrong_pin = '1234';
+                                attempt();
+                            }).fail(function(error) {
+                                $rootScope.$apply(function() {
+                                    console.log('reset pin error ' + error);
+                                    if (error.indexOf("6982") >= 0) {
+                                        // setMsg("Dongle is locked - enter the PIN");
+                                        scope.btchip.resets_remaining -= 1;
+                                    } else if (error.indexOf("6985") >= 0) {
+                                        // var setupText = "Dongle is not set up";
+                                        scope.btchip.resets_remaining = 0;
+                                    }
+                                    scope.btchip.replug_required = true;
+                                    if (scope.btchip.resets_remaining) {
+                                        service.getDevice(true).then(function(btchip_) {
+                                            btchip = btchip_;
+                                            scope.btchip.replug_required = false;
+                                            attempt();
+                                        })
+                                    } else {
+                                        service.getDevice(true).then(function(btchip_) {
+                                            btchip = btchip_;
+                                            scope.btchip.replug_required = false;
+                                            scope.btchip.resetting = false;
+                                            scope.btchip.already_setup = false;
+                                        });
+                                    }
+                                });
+                            });
+                        };
+                        attempt();
+                    },
+                    store: function() {
+                        this.storing = true;
+                        service.promptPin('', function(err, pin) {
+                            if (!pin) return;
+                            mnemonics.toSeed(mnemonic).then(function(seed) {
+                                btchip.app.setupNew_async(
+                                    0x01,  // wallet mode
+
+                                    0x02 | // deterministic signatures
+                                    0x08,  // skip second factor if consuming only P2SH inputs in a transaction
+
+                                    Bitcoin.network[cur_net].addressVersion,
+                                    Bitcoin.network[cur_net].p2shVersion,
+                                    new ByteString(pin, ASCII),
+                                    undefined,  // wipePin
+
+                                    // undefined,  // keymapEncoding
+                                    // true,  // restoreSeed
+                                    new ByteString(seed, HEX) // bip32Seed
+                                ).then(function() {
+                                    $rootScope.$apply(function() {
+                                        scope.btchip.storing = false;
+                                        scope.btchip.gait_setup = true;
+                                        deferred.resolve();
+                                    });
+                                }).fail(function(error) {
+                                    notices.makeNotice('error', error);
+                                    console.log('setupNew_async error: ' + error);
+                                });
+                            }, null, function(progress) {
+                                scope.btchip.seed_progress = progress;
+                            });
+                        });
+                    }
+                };
+                var do_modal = function() {
+                    $modal.open({
+                        templateUrl: BASE_URL+'/'+LANG+'/wallet/partials/wallet_modal_btchip_setup.html',
+                        scope: scope
+                    }).result.finally(function() {
+                        btchip.dongle.disconnect_async();
+                    });
+                }
+                btchip.app.getWalletPublicKey_async("0'/0/0").then(function(result) {
+                    scope.btchip.already_setup = true;
+                    do_modal();
+                }).fail(function(error) {
+                    if (error.indexOf("6982") >= 0) {
+                        // setMsg("Dongle is locked - enter the PIN");
+                        scope.btchip.already_setup = true;
+                    } else if (error.indexOf("6985") >= 0) {
+                        // var setupText = "Dongle is not set up";
+                    } else if (error.indexOf("6faa") >= 0) {
+                        // setMsg("Dongle is locked - remove the dongle and retry");
+                        scope.btchip.already_setup = true;
+                    }
+                    do_modal();
+                });
+            });
+
+            return deferred.promise;
+        }
+    }
 }]).factory('bip38', ['$q', '$modal', 'mnemonics', 'focus', function($q, $modal, mnemonics, focus) {
     var bip38Service = {}, iframe;
     bip38Service.processMessage = function(message) {
@@ -1834,12 +2194,12 @@ angular.module('greenWalletServices', [])
                     iframe = document.getElementById("id_iframe_bip38_service");
                     process();
                 } else {
-                    iframe = document.createElement("IFRAME"); 
+                    iframe = document.createElement("IFRAME");
                     iframe.onload = process;
                     iframe.setAttribute("src", "/bip38_sandbox.html");
                     iframe.setAttribute("class", "ng-hide");
                     iframe.setAttribute("id", "id_iframe_bip38_service");
-                    document.body.appendChild(iframe); 
+                    document.body.appendChild(iframe);
                 }
             } else {
                 process();
@@ -1934,12 +2294,12 @@ angular.module('greenWalletServices', [])
                         iframe = document.getElementById("id_iframe_send_bip38");
                         process();
                     } else {
-                        iframe = document.createElement("IFRAME"); 
+                        iframe = document.createElement("IFRAME");
                         iframe.onload = process;
                         iframe.setAttribute("src", "/bip38_sandbox.html");
                         iframe.setAttribute("class", "ng-hide");
                         iframe.setAttribute("id", "id_iframe_send_bip38");
-                        document.body.appendChild(iframe); 
+                        document.body.appendChild(iframe);
                     }
                 } else {
                     process();
