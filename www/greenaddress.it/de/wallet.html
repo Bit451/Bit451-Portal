@@ -63,7 +63,7 @@
 <script type="text/javascript" src="../static/js/angular/angular-touch.min.js"></script>
 <script type="text/javascript" src="../static/js/angular/qrcode.js"></script>
 <script type="text/javascript" src="../static/js/angular/angular-qr.min.js"></script>
-<script type="text/javascript" src="../static/js/angular/ui-bootstrap-tpls-0.10.0.min.js"></script>
+<script type="text/javascript" src="../static/js/angular/ui-bootstrap-tpls-0.11.0.min.js"></script>
 <script type="text/javascript" src="../static/js/sha512.js"></script>
 <script type="text/javascript" src="../static/js/greenwallet/signuplogin/controllers.js"></script>
 <script type="text/javascript" src="../static/js/greenwallet/info/controllers.js"></script>
@@ -126,13 +126,13 @@
     <i class="menu-mobile-toggle menu-mobile-toggle-close glyphicon glyphicon-remove" toggle-class="visible" ng-click="toggle_set(false)"></i>
     <small>(( subpage_title ))</small>
   </div>
-  <div class="menu-mobile-bottom" toggle-class="visible">
+  <div class="menu-mobile-bottom" toggle-class="visible" ng-show="wallet.final_balance !== undefined">
     <a style="color:inherit;" href="" x-apple-data-detectors="false">((wallet.final_balance|format_btc:wallet.unit))</a> ≈ <a style="color:inherit;"  href="" x-apple-data-detectors="false">((wallet.fiat_value|number:2)) ((wallet.fiat_currency))</a> 
   </div>
   <div class="container" toggle-class="visible">
-    <p ng-show="wallet.twofac && !wallet.twofac.any"><span class="label label-warning">WARNING:</span> You have no two factor authentication set up. Please set it up in <a href="#/settings">settings</a>.</p>
-    <p ng-show="wallet.hdwallet.priv && !wallet.appearance.mnemonic_verified"><span class="label label-warning">WARNING</span>
-      You have not verified that you have backed up your mnemonic.
+    <p ng-show="wallet.twofac && !wallet.twofac.any"><span class="label label-warning">WARNUNG:</span> Sie haben keine zwei-Faktor-Authentifizierung eingerichtet. Bitte richten sie in den <a href="#/settings"> Einstellungen</a>.</p>
+    <p ng-show="wallet.hdwallet.priv && !wallet.appearance.mnemonic_verified"><span class="label label-warning">WARNUNG</span>
+      Sie haben nicht überprüft, dass Sie Ihre mnemonische gesichert haben.
       <a href="" ng-click="verify_mnemonic()">Please verify now by clicking here.</a>
     </p>
     <div class="ng-view"></div>
